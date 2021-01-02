@@ -2,8 +2,8 @@
 
 // Self imports
 use crate::cpu::CPU;
+use crate::frame_buffer::FrameBuffer;
 use crate::keypad::Keypad;
-use crate::screen::Screen;
 
 use crate::OFFSET;
 
@@ -12,7 +12,7 @@ use std::fs::File;
 use std::io::Read;
 
 fn create_test_cpu() -> CPU {
-    let path = "./roms/BC_test.ch8";
+    let path = "./roms/test/BC_test.ch8";
 
     // Read ROM into Vec<u8> which can then be loaded into CPU memory.
     let mut file = File::open(path).expect("unable to open file");
@@ -22,7 +22,6 @@ fn create_test_cpu() -> CPU {
     // Create CPU and load ROM.
     let mut cpu = CPU::default();
     cpu.load(rom);
-
     cpu
 }
 
@@ -44,7 +43,7 @@ fn test_creating_default_cpu() {
         pc: OFFSET,
         delay_timer: 0,
         sound_timer: 0,
-        screen: Screen::new(true, true),
+        frame: FrameBuffer::new(true, true),
         keypad: Keypad::new(),
     };
     expected.load_font();
@@ -75,21 +74,38 @@ fn test_fetching_instructions() {
 }
 
 #[test]
+fn test_setting_key() {
+    let mut cpu = create_test_cpu();
+
+    cpu.set_key(0);
+    assert_eq!(cpu.keypad.is_pressed(0), true);
+
+    cpu.set_key(4);
+    assert_eq!(cpu.keypad.is_pressed(4), true);
+
+    cpu.set_key(0xA);
+    assert_eq!(cpu.keypad.is_pressed(0xA), true);
+
+    cpu.set_key(0xF);
+    assert_eq!(cpu.keypad.is_pressed(0xF), true);
+}
+
+#[test]
 /// Screen should be cleared.
-fn test_CLS_opcode() {
+fn test_opcode_00e0() {
     // Initialise test by creating a CPU and turning some pixels on.
     let mut cpu = CPU::default();
-    cpu.screen.set_pixel(0, 0, true);
-    cpu.screen.set_pixel(16, 32, true);
-    cpu.screen.set_pixel(31, 63, true);
+    cpu.frame.set_pixel(0, 0, true);
+    cpu.frame.set_pixel(16, 32, true);
+    cpu.frame.set_pixel(31, 63, true);
 
     // Execute the given instruction.
     load_and_execute_instruction(&mut cpu, 0x00E0);
 
     // Check the screen was cleared.
-    assert_eq!(cpu.screen.get_pixel(0, 0), false);
-    assert_eq!(cpu.screen.get_pixel(16, 32), false);
-    assert_eq!(cpu.screen.get_pixel(31, 63), false);
+    assert_eq!(cpu.frame.get_pixel(0, 0), false);
+    assert_eq!(cpu.frame.get_pixel(16, 32), false);
+    assert_eq!(cpu.frame.get_pixel(31, 63), false);
 
     // Check PC advanced 2 memory addresses since instructions are 2 bytes long.
     assert_eq!(cpu.pc, 0x202);
@@ -97,40 +113,40 @@ fn test_CLS_opcode() {
 
 #[test]
 /// PC should jump to address pointed to on stack by SP.
-fn test_RET_opcode() {
+fn test_opcode_00ee() {
     // Initialise test by creating CPU and adding memory address to the stack.
     let mut cpu = CPU::default();
-    cpu.stack[0] = 0x202;
+    cpu.stack[0] = 0x666;
     cpu.sp = 1;
 
     load_and_execute_instruction(&mut cpu, 0x00EE);
-    assert_eq!(cpu.pc, 0x202);
+    assert_eq!(cpu.pc, 0x666);
     assert_eq!(cpu.sp, 0);
 }
 
 #[test]
 /// PC should jump to memory address NNN.
-fn test_JP_NNN_opcode() {
+fn test_opcode_1nnn() {
     let mut cpu = CPU::default();
-    load_and_execute_instruction(&mut cpu, 0x1102);
 
-    assert_eq!(cpu.pc, 0x302);
+    load_and_execute_instruction(&mut cpu, 0x1102);
+    assert_eq!(cpu.pc, 0x102);
 }
 
 #[test]
-/// PC should jump to memory address NNN and add previous address to the stack.
-fn test_CALL_NNN_opcode() {
+/// PC should jump to memory address NNN and add previous address (plus 2) to the stack.
+fn test_opcode_2nnn() {
     let mut cpu = CPU::default();
-    load_and_execute_instruction(&mut cpu, 0x2102);
+    load_and_execute_instruction(&mut cpu, 0x2666);
 
     assert_eq!(cpu.sp, 1);
-    assert_eq!(cpu.stack[0], 0x200);
-    assert_eq!(cpu.pc, 0x302);
+    assert_eq!(cpu.stack[0], 0x202);
+    assert_eq!(cpu.pc, 0x666);
 }
 
 #[test]
 /// PC should skip next instruction if Vx == NN.
-fn test_SE_Vx_NN_opcode() {
+fn test_opcode_3xkk() {
     let mut cpu = CPU::default();
 
     // Skip instruction (advanced PC by 4) if V[3] == 4;
@@ -146,7 +162,7 @@ fn test_SE_Vx_NN_opcode() {
 
 #[test]
 /// PC should skip next instruction if Vx != NN.
-fn test_SNE_Vx_NN_opcode() {
+fn test_opcode_4xkk() {
     let mut cpu = CPU::default();
 
     cpu.v[0x3] = 4;
@@ -160,7 +176,7 @@ fn test_SNE_Vx_NN_opcode() {
 
 #[test]
 /// PC should skip next instruction if Vx == Vn.
-fn test_SE_Vx_Vy_opcode() {
+fn test_opcode_5xy0() {
     let mut cpu = CPU::default();
 
     cpu.v[0x3] = 4;
@@ -176,7 +192,7 @@ fn test_SE_Vx_Vy_opcode() {
 
 #[test]
 /// Vx should contain NN.
-fn test_LD_Vx_NN_opcode() {
+fn test_opcode_6xkk() {
     let mut cpu = CPU::default();
 
     load_and_execute_instruction(&mut cpu, 0x6D12);
@@ -190,7 +206,7 @@ fn test_LD_Vx_NN_opcode() {
 
 #[test]
 /// NN should be added to the value of Vx. Wrap upon overflow.
-fn test_ADD_Vx_NN_opcode() {
+fn test_opcode_7xkk() {
     let mut cpu = CPU::default();
 
     load_and_execute_instruction(&mut cpu, 0x7311);
@@ -209,7 +225,7 @@ fn test_ADD_Vx_NN_opcode() {
 
 #[test]
 /// Value in Vy should be stored in Vx.
-fn test_LD_Vx_Vy_opcode() {
+fn test_opcode_8xy0() {
     let mut cpu = CPU::default();
 
     cpu.v[1] = 1;
@@ -226,7 +242,7 @@ fn test_LD_Vx_Vy_opcode() {
 
 #[test]
 /// Vx should store result of Vx OR Vy.
-fn test_OR_Vx_Vy_opcode() {
+fn test_opcode_8xy1() {
     let mut cpu = CPU::default();
 
     cpu.v[1] = 73;
@@ -239,7 +255,7 @@ fn test_OR_Vx_Vy_opcode() {
 
 #[test]
 /// Vx should store result of Vx AND Vy.
-fn test_AND_Vx_Vy_opcode() {
+fn test_opcode_8xy2() {
     let mut cpu = CPU::default();
 
     cpu.v[1] = 73;
@@ -252,7 +268,7 @@ fn test_AND_Vx_Vy_opcode() {
 
 #[test]
 /// Vx should store result of Vx XOR Vy.
-fn test_XOR_Vx_Vy_opcode() {
+fn test_opcode_8xy3() {
     let mut cpu = CPU::default();
     cpu.v[1] = 73;
     cpu.v[2] = 23;
@@ -264,7 +280,7 @@ fn test_XOR_Vx_Vy_opcode() {
 
 #[test]
 /// Vx should store result of Vx + Vy. Set VF if overflow occurs.
-fn test_ADD_Vx_Vy_opcode() {
+fn test_opcode_8xy4() {
     let mut cpu = CPU::default();
     cpu.v[1] = 73;
     cpu.v[2] = 23;
@@ -285,7 +301,7 @@ fn test_ADD_Vx_Vy_opcode() {
 
 #[test]
 /// Vx should store the result of Vx - Vy. Set CF to 1 if an underflow DOES NOT occur.
-fn test_SUB_Vx_Vy_opcode() {
+fn test_opcode_8xy5() {
     let mut cpu = CPU::default();
     cpu.v[1] = 73;
     cpu.v[2] = 23;
@@ -306,7 +322,7 @@ fn test_SUB_Vx_Vy_opcode() {
 
 #[test]
 /// Set Vf to 1 if smallest bit of Vy is 1. Vx should contain Vy >> 1.
-fn test_SHR_Vx_Vy_opcode() {
+fn test_opcode_8xy6() {
     let mut cpu = CPU::default();
     cpu.v[2] = 64;
     load_and_execute_instruction(&mut cpu, 0x8126);
@@ -325,7 +341,7 @@ fn test_SHR_Vx_Vy_opcode() {
 
 #[test]
 /// Vx should store Vy - Vx. VD should contain 1 if underflow DID NOT occur.
-fn test_SUBN_Vx_Vy_opcode() {
+fn test_opcode_8xy7() {
     let mut cpu = CPU::default();
     cpu.v[1] = 73;
     cpu.v[2] = 23;
@@ -346,7 +362,7 @@ fn test_SUBN_Vx_Vy_opcode() {
 
 #[test]
 /// Set VF to 1 if largest bit of Vy is 1. Vx should contain Vy << 1.
-fn test_SHL_Vx_Vy_opcode() {
+fn test_opcode_8xye() {
     let mut cpu = CPU::default();
 
     cpu.v[2] = 32;
@@ -366,7 +382,7 @@ fn test_SHL_Vx_Vy_opcode() {
 
 #[test]
 /// Should skip next instruction if Vx != Vy.
-fn test_SNE_Vx_Vy_opcode() {
+fn test_opcode_9xy0() {
     let mut cpu = CPU::default();
 
     cpu.v[1] = 1;
@@ -382,7 +398,7 @@ fn test_SNE_Vx_Vy_opcode() {
 
 #[test]
 /// Should store address NNN in the I register.
-fn test_LD_I_NNN_opcode() {
+fn test_opcode_annn() {
     let mut cpu = CPU::default();
 
     load_and_execute_instruction(&mut cpu, 0xA304);
@@ -396,7 +412,7 @@ fn test_LD_I_NNN_opcode() {
 
 #[test]
 /// Should jump PC to V0 + NNN.
-fn test_JP_V0_NNN_opcode() {
+fn test_opcode_bnnn() {
     let mut cpu = CPU::default();
 
     cpu.v[0] = 0x22;
@@ -410,7 +426,7 @@ fn test_JP_V0_NNN_opcode() {
 
 #[test]
 /// Should generate a random number and do a bitwise AND with KK.
-fn test_RND_Vx_KK_opcode() {
+fn test_opcode_cxkk() {
     let mut cpu = CPU::default();
 
     for _ in 0..4 {
@@ -426,43 +442,43 @@ fn test_RND_Vx_KK_opcode() {
 
 #[test]
 /// Should draw the sprite at given position. Sprite is a 0 for this case.
-fn test_DRW_Vx_Vy_N_opcode() {
+fn test_opcode_dxyn() {
     let mut cpu = CPU::default();
 
     cpu.i = 0;
     load_and_execute_instruction(&mut cpu, 0xD005);
 
-    assert_eq!(cpu.screen.get_pixel(0, 0), true);
-    assert_eq!(cpu.screen.get_pixel(0, 1), true);
-    assert_eq!(cpu.screen.get_pixel(0, 2), true);
-    assert_eq!(cpu.screen.get_pixel(0, 3), true);
-    assert_eq!(cpu.screen.get_pixel(0, 4), false);
+    assert_eq!(cpu.frame.get_pixel(0, 0), true);
+    assert_eq!(cpu.frame.get_pixel(0, 1), true);
+    assert_eq!(cpu.frame.get_pixel(0, 2), true);
+    assert_eq!(cpu.frame.get_pixel(0, 3), true);
+    assert_eq!(cpu.frame.get_pixel(0, 4), false);
 
-    assert_eq!(cpu.screen.get_pixel(1, 0), true);
-    assert_eq!(cpu.screen.get_pixel(1, 1), false);
-    assert_eq!(cpu.screen.get_pixel(1, 2), false);
-    assert_eq!(cpu.screen.get_pixel(1, 3), true);
+    assert_eq!(cpu.frame.get_pixel(1, 0), true);
+    assert_eq!(cpu.frame.get_pixel(1, 1), false);
+    assert_eq!(cpu.frame.get_pixel(1, 2), false);
+    assert_eq!(cpu.frame.get_pixel(1, 3), true);
 
-    assert_eq!(cpu.screen.get_pixel(2, 0), true);
-    assert_eq!(cpu.screen.get_pixel(2, 1), false);
-    assert_eq!(cpu.screen.get_pixel(2, 2), false);
-    assert_eq!(cpu.screen.get_pixel(2, 3), true);
+    assert_eq!(cpu.frame.get_pixel(2, 0), true);
+    assert_eq!(cpu.frame.get_pixel(2, 1), false);
+    assert_eq!(cpu.frame.get_pixel(2, 2), false);
+    assert_eq!(cpu.frame.get_pixel(2, 3), true);
 
-    assert_eq!(cpu.screen.get_pixel(3, 0), true);
-    assert_eq!(cpu.screen.get_pixel(3, 1), false);
-    assert_eq!(cpu.screen.get_pixel(3, 2), false);
-    assert_eq!(cpu.screen.get_pixel(3, 3), true);
+    assert_eq!(cpu.frame.get_pixel(3, 0), true);
+    assert_eq!(cpu.frame.get_pixel(3, 1), false);
+    assert_eq!(cpu.frame.get_pixel(3, 2), false);
+    assert_eq!(cpu.frame.get_pixel(3, 3), true);
 
-    assert_eq!(cpu.screen.get_pixel(4, 0), true);
-    assert_eq!(cpu.screen.get_pixel(4, 1), true);
-    assert_eq!(cpu.screen.get_pixel(4, 2), true);
-    assert_eq!(cpu.screen.get_pixel(4, 3), true);
-    assert_eq!(cpu.screen.get_pixel(4, 4), false);
+    assert_eq!(cpu.frame.get_pixel(4, 0), true);
+    assert_eq!(cpu.frame.get_pixel(4, 1), true);
+    assert_eq!(cpu.frame.get_pixel(4, 2), true);
+    assert_eq!(cpu.frame.get_pixel(4, 3), true);
+    assert_eq!(cpu.frame.get_pixel(4, 4), false);
 }
 
 #[test]
 /// Should skip the next instruction if key pressed has value Vx.
-fn test_SKP_Vx_opcode() {
+fn test_opcode_ex9e() {
     let mut cpu = CPU::default();
 
     load_and_execute_instruction(&mut cpu, 0xE09E);
@@ -476,7 +492,7 @@ fn test_SKP_Vx_opcode() {
 
 #[test]
 /// Should skip the next instruction if key pressed does not have value Vx.
-fn test_SKNP_Vx_opcode() {
+fn test_opcode_exa1() {
     let mut cpu = CPU::default();
 
     load_and_execute_instruction(&mut cpu, 0xE0A1);
@@ -490,7 +506,7 @@ fn test_SKNP_Vx_opcode() {
 
 #[test]
 /// Should store the value of the delay timer into Vx.
-fn test_LD_Vx_DT() {
+fn test_opcode_fx07() {
     let mut cpu = CPU::default();
 
     cpu.delay_timer = 23;
@@ -501,7 +517,7 @@ fn test_LD_Vx_DT() {
 
 #[test]
 ///  Should wait until a key is pressed and store the value in Vx.
-fn test_LD_Vx_K() {
+fn test_opcode_fx0a() {
     let mut cpu = CPU::default();
 
     load_and_execute_instruction(&mut cpu, 0xf00a);
@@ -518,7 +534,7 @@ fn test_LD_Vx_K() {
 
 #[test]
 /// Should store the value of Vx in the delay timer.
-fn test_LD_DT_Vx() {
+fn test_opcode_fx15() {
     let mut cpu = CPU::default();
 
     cpu.v[0] = 23;
@@ -528,7 +544,7 @@ fn test_LD_DT_Vx() {
 }
 
 /// Should store the value of Vx in the delay timer.
-fn test_LD_ST_Vx() {
+fn test_opcode_fx18() {
     let mut cpu = CPU::default();
 
     cpu.v[0] = 23;
@@ -539,7 +555,7 @@ fn test_LD_ST_Vx() {
 
 #[test]
 /// Should store I + Vx in I.
-fn test_ADD_I_Vx_opcode() {
+fn test_opcode_fx1e() {
     let mut cpu = CPU::default();
 
     cpu.v[0] = 25;
@@ -556,7 +572,7 @@ fn test_ADD_I_Vx_opcode() {
 
 #[test]
 /// Should set I-register to the index of the hexadecimal sprite with value of Vx. In practice I = Vx * 5;
-fn test_LD_F_Vx() {
+fn test_opcode_fx29() {
     let mut cpu = CPU::default();
 
     cpu.v[0] = 0;
@@ -571,11 +587,11 @@ fn test_LD_F_Vx() {
 
 #[test]
 /// TODO -- Should store binary-coded decimal representation of Vx in memory at locations I, I + 1 and I + 2.
-fn test_LD_B_Vx() {}
+fn test_opcode_fx33() {}
 
 #[test]
 /// Should store registers V0 to Vx in memory starting at location I.
-fn test_LD__I__Vx() {
+fn test_opcode_fx55() {
     let mut cpu = CPU::default();
 
     cpu.i = 0x300;
@@ -601,7 +617,7 @@ fn test_LD__I__Vx() {
 
 #[test]
 /// Should read values of I to I+x into registers V0 to Vx.
-fn test_LD_Vx__I__Vx() {
+fn test_opcode_fx65() {
     let mut cpu = CPU::default();
 
     cpu.i = 0x300;

@@ -1,6 +1,6 @@
 // Self imports
+use crate::frame_buffer::FrameBuffer;
 use crate::keypad::Keypad;
-use crate::screen::Screen;
 
 use crate::OFFSET;
 use crate::WRAP_X;
@@ -46,11 +46,12 @@ pub struct CPU {
     pc: usize,
 
     // Two 8-bit registers used as timers. One for Delay, one for Sound. Decrement at 60Hz when set.
+    delay_counter: u8,
     delay_timer: u8,
     sound_timer: u8,
 
-    // Display is monochrome and 64x32.
-    screen: Screen,
+    // FrameBuffer is monochrome and 64x32.
+    frame: FrameBuffer,
 
     // 16 possible keys. Mapping found in Keycode file.
     keypad: Keypad,
@@ -65,9 +66,10 @@ impl Default for CPU {
             stack: [usize::MAX; 16],
             i: 0,
             pc: OFFSET,
+            delay_counter: 0,
             delay_timer: 0,
             sound_timer: 0,
-            screen: Screen::new(WRAP_X, WRAP_Y),
+            frame: FrameBuffer::new(WRAP_X, WRAP_Y),
             keypad: Keypad::new(),
         };
 
@@ -78,12 +80,30 @@ impl Default for CPU {
 
 impl CPU {
     pub fn cycle(&mut self) {
+        if self.delay_timer > 0 {
+            self.delay_counter += 1;
+            if self.delay_counter == 9 {
+                self.delay_timer -= 1;
+                self.delay_counter = 0;
+            }
+        }
+
         self.execute_instruction(self.get_instruction())
     }
 
     /// Read a Vec<u8> ROM into memory.
     pub fn load(&mut self, rom: Vec<u8>) {
         self.memory[OFFSET..OFFSET + rom.len()].copy_from_slice(&rom); // Load ROM into program memory.
+    }
+
+    /// Get frame buffer
+    pub fn get_framebuffer(&self) -> &[u64] {
+        self.frame.get_buffer()
+    }
+
+    /// Press a key
+    pub fn set_key(&mut self, k: u8) {
+        self.keypad.set_pressed(k)
     }
 
     /// Get the current opcode. Two bytes. Big endian. First always at positive index.
@@ -150,7 +170,7 @@ impl CPU {
 
     /// CLS --> Clear the screen.
     fn opcode_00e0(&mut self) -> ProgramCounter {
-        self.screen.clear();
+        self.frame.clear();
         ProgramCounter::Next
     }
 
@@ -160,16 +180,16 @@ impl CPU {
         ProgramCounter::Jump(self.stack[self.sp])
     }
 
-    /// JP nnn -> Jump program counter to given address (plus the offset).
+    /// JP nnn -> Jump program counter to given address.
     fn opcode_1nnn(&mut self, nnn: usize) -> ProgramCounter {
-        ProgramCounter::Jump(OFFSET + nnn)
+        ProgramCounter::Jump(nnn)
     }
 
-    /// CALL nnn -> Add current program counter to stack and set program counter to given address.
+    /// CALL nnn -> Add current program counter ( plus two) to stack and set program counter to given address.
     fn opcode_2nnn(&mut self, nnn: usize) -> ProgramCounter {
-        self.stack[self.sp] = self.pc;
+        self.stack[self.sp] = self.pc + 2;
         self.sp += 1;
-        ProgramCounter::Jump(OFFSET + nnn)
+        ProgramCounter::Jump(nnn)
     }
 
     /// SE Vx kk --> Skip next instruction if Vx is equal to kk.
@@ -288,7 +308,8 @@ impl CPU {
     /// DRW Vx Vy n --> Draw the sprite beginning at memory address I and ending at I + k at position (Vx, Vy).
     fn opcode_dxyn(&mut self, x: usize, y: usize, n: usize) -> ProgramCounter {
         let sprite = &self.memory[self.i..self.i + n];
-        self.screen.draw_sprite(sprite, y, x);
+        self.frame
+            .draw_sprite(sprite, self.v[y] as usize, self.v[x] as usize);
         ProgramCounter::Next
     }
 
@@ -396,6 +417,13 @@ impl CPU {
         ];
 
         self.memory[0..80].copy_from_slice(&font);
+    }
+
+    pub fn dbg(&self) {
+        println!("--- DEBUG ---");
+        println!("PC: {:x}", self.pc);
+        println!("OP: {:x}", self.get_instruction());
+        println!("-------------\n");
     }
 }
 

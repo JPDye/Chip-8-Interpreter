@@ -16,8 +16,21 @@ impl Screen {
         }
     }
 
-    pub fn get_pixel_buffer(&self) -> &[u64; 32] {
-        &self.pixel_buffer
+    /// Convert pixel_buffer to a Vec<u8>.
+    pub fn get_buffer(&self) -> Vec<u8> {
+        let mut buffer = Vec::new();
+
+        for row in 0..32 {
+            for col in (0..64).rev() {
+                let rgba = if (self.pixel_buffer[row] >> col) & 1 == 1 {
+                    [0xFF, 0xFF, 0xFF, 0xFF]
+                } else {
+                    [0x00, 0x00, 0x00, 0x00]
+                };
+                buffer.extend(&rgba);
+            }
+        }
+        buffer
     }
 
     /// Set every bit (pixel) in the buffer to be 0.

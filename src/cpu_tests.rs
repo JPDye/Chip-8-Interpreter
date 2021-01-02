@@ -114,7 +114,7 @@ fn test_JP_NNN_opcode() {
     let mut cpu = CPU::default();
     load_and_execute_instruction(&mut cpu, 0x1102);
 
-    assert_eq!(cpu.pc, 0x302);
+    assert_eq!(cpu.pc, 0x102);
 }
 
 #[test]
@@ -125,7 +125,7 @@ fn test_CALL_NNN_opcode() {
 
     assert_eq!(cpu.sp, 1);
     assert_eq!(cpu.stack[0], 0x200);
-    assert_eq!(cpu.pc, 0x302);
+    assert_eq!(cpu.pc, 0x102);
 }
 
 #[test]

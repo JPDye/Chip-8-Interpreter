@@ -86,6 +86,11 @@ impl CPU {
         self.memory[OFFSET..OFFSET + rom.len()].copy_from_slice(&rom); // Load ROM into program memory.
     }
 
+    /// Get a renderable pixel buffer from the screen struct.
+    pub fn get_buffer(&self) -> Vec<u8> {
+        self.screen.get_buffer()
+    }
+
     /// Get the current opcode. Two bytes. Big endian. First always at positive index.
     fn get_instruction(&self) -> usize {
         (self.memory[self.pc] as usize) << 8 | (self.memory[self.pc + 1] as usize)
@@ -162,14 +167,14 @@ impl CPU {
 
     /// JP nnn -> Jump program counter to given address (plus the offset).
     fn opcode_1nnn(&mut self, nnn: usize) -> ProgramCounter {
-        ProgramCounter::Jump(OFFSET + nnn)
+        ProgramCounter::Jump(nnn)
     }
 
     /// CALL nnn -> Add current program counter to stack and set program counter to given address.
     fn opcode_2nnn(&mut self, nnn: usize) -> ProgramCounter {
         self.stack[self.sp] = self.pc;
         self.sp += 1;
-        ProgramCounter::Jump(OFFSET + nnn)
+        ProgramCounter::Jump(nnn)
     }
 
     /// SE Vx kk --> Skip next instruction if Vx is equal to kk.

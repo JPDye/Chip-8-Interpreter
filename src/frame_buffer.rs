@@ -1,8 +1,7 @@
 /// Holds the pixel buffer and has methods for setting pixels, clearing the buffer and retrieving it.
 #[derive(Debug, PartialEq)]
 pub struct FrameBuffer {
-    buffer: [u64; 32],
-    /// 64x32 display represented using 32 64-bit integers.
+    buffer: [u64; 32], // 64x32 display represented using 32 64-bit integers.
     wrap_x: bool,
     wrap_y: bool,
 }
@@ -26,12 +25,16 @@ impl FrameBuffer {
     }
 
     /// Draw sprite at given position
-    pub fn draw_sprite(&mut self, sprite: &[u8], row: usize, col: usize) {
+    pub fn draw_sprite(&mut self, sprite: &[u8], row: usize, col: usize) -> bool {
+        let mut change = false;
         let shift_amount = 63i32 - col as i32 - 7i32;
         for (i, byte) in sprite.iter().enumerate() {
             let byte = self.shift_byte(*byte, shift_amount as i32);
-            self.draw_byte(row + i, byte);
+            if self.draw_byte(row + i, byte) {
+                change = true;
+            }
         }
+        change
     }
 
     /// Cast a byte to a u64 and shift bits given amount. Wrap if flag is set.
@@ -48,11 +51,15 @@ impl FrameBuffer {
     }
 
     /// Draw a byte (cast to a u64) to the pixel buffer and wrap vertically if flag is set.
-    fn draw_byte(&mut self, row: usize, byte: u64) {
+    fn draw_byte(&mut self, row: usize, byte: u64) -> bool {
         if row < 32 {
             self.buffer[row] ^= byte;
+            byte & self.buffer[row] != byte
         } else if self.wrap_y {
             self.buffer[row % 32] ^= byte;
+            byte & self.buffer[row % 32] != byte
+        } else{
+            false
         }
     }
 

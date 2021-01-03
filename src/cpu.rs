@@ -97,13 +97,18 @@ impl CPU {
     }
 
     /// Get frame buffer
-    pub fn get_framebuffer(&self) -> &[u64] {
+    pub fn get_framebuffer(&mut self) -> &[u64] {
         self.frame.get_buffer()
     }
 
     /// Press a key
     pub fn set_key(&mut self, k: u8) {
         self.keypad.set_pressed(k)
+    }
+
+    /// Clear all keypad inputs. No keys are being pressed.
+    pub fn clear_keys(&mut self) {
+        self.keypad.clear()
     }
 
     /// Get the current opcode. Two bytes. Big endian. First always at positive index.
@@ -308,8 +313,9 @@ impl CPU {
     /// DRW Vx Vy n --> Draw the sprite beginning at memory address I and ending at I + k at position (Vx, Vy).
     fn opcode_dxyn(&mut self, x: usize, y: usize, n: usize) -> ProgramCounter {
         let sprite = &self.memory[self.i..self.i + n];
-        self.frame
+        let change = self.frame
             .draw_sprite(sprite, self.v[y] as usize, self.v[x] as usize);
+        self.v[0xF] = if change { 1} else {0 };
         ProgramCounter::Next
     }
 

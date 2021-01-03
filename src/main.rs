@@ -24,7 +24,7 @@ pub const WRAP_Y: bool = true; // Wrap vertically when drawing sprites?
 pub const OFFSET: usize = 0x200; // Beginning of memory reserved for program.
 
 fn main() {
-    let mut vm = VM::new("./roms/Pong (1 player).ch8");
+    let mut vm = VM::new("./roms/breakout.ch8");
     vm.run(Mode::Release);
 }
 
@@ -70,7 +70,7 @@ impl VM {
             match keycode {
                 Some(255) => self.cpu.dbg(),
                 Some(key) => self.cpu.set_key(key),
-                _ => (),
+                _ => self.cpu.clear_keys(),
             }
 
             match mode {

@@ -43,6 +43,10 @@ impl Keypad {
         Self { keys: 0 }
     }
 
+    pub fn clear(&mut self) {
+        self.keys = 0;
+    }
+
     pub fn set_pressed(&mut self, k: u8) {
         self.keys = 1 << k;
     }

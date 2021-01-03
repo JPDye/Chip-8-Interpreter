@@ -41,6 +41,7 @@ fn test_creating_default_cpu() {
         stack: [usize::MAX; 16],
         i: 0,
         pc: OFFSET,
+        delay_counter: 0,
         delay_timer: 0,
         sound_timer: 0,
         frame: FrameBuffer::new(true, true),

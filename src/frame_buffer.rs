@@ -2,6 +2,7 @@
 #[derive(Debug, PartialEq)]
 pub struct FrameBuffer {
     buffer: [u64; 32], // 64x32 display represented using 32 64-bit integers.
+    prev_buffer: [u64; 32],
     wrap_x: bool,
     wrap_y: bool,
 }
@@ -10,13 +11,21 @@ impl FrameBuffer {
     pub fn new(wrap_x: bool, wrap_y: bool) -> Self {
         FrameBuffer {
             buffer: [0; 32],
+            prev_buffer: [0; 32],
             wrap_x,
             wrap_y,
         }
     }
 
-    pub fn get_buffer(&self) -> &[u64] {
-        &self.buffer
+    pub fn get_buffer(&mut self) -> Vec<u64> {
+        let mut buf = Vec::new();
+
+        for i in 0..32 {
+            buf.push(self.prev_buffer[i] | self.buffer[i]);
+        }
+
+        self.prev_buffer = self.buffer.clone();
+        buf
     }
 
     /// Set every bit (pixel) in the buffer to be 0.

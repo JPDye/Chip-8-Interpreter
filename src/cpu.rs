@@ -97,7 +97,7 @@ impl CPU {
     }
 
     /// Get frame buffer
-    pub fn get_framebuffer(&mut self) -> &[u64] {
+    pub fn get_framebuffer(&mut self) -> Vec<u64> {
         self.frame.get_buffer()
     }
 

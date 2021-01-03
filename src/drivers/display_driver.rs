@@ -27,7 +27,7 @@ impl DisplayDriver {
         Self { canvas }
     }
 
-    pub fn draw(&mut self, pixels: &[u64]) {
+    pub fn draw(&mut self, pixels: Vec<u64>) {
         for (y, row) in pixels.iter().enumerate() {
             for (x, col) in (0..64).rev().enumerate() {
                 let pixel = (row >> col) & 1;

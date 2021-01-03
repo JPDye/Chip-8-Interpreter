@@ -24,7 +24,7 @@ pub const WRAP_Y: bool = true; // Wrap vertically when drawing sprites?
 pub const OFFSET: usize = 0x200; // Beginning of memory reserved for program.
 
 fn main() {
-    let mut vm = VM::new("./roms/breakout.ch8");
+    let mut vm = VM::new("./roms/tetris.ch8");
     vm.run(Mode::Release);
 }
 
